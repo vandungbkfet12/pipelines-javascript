@@ -30,39 +30,40 @@ stages:
         replaceExistingArchive: true
     - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
       artifact: drop
-  - deployment: VMDeploy
-    displayName: web
-    environment:
-      name: VM01
-      resourceType: VirtualMachine
-      tags: web
-    strategy:
-        rolling:
-          maxParallel: 2  #for percentages, mention as x%
-          preDeploy:
-            steps:
-            - download: current
-              artifact: drop
-            - script: echo initialize, cleanup, backup, install certs
-          deploy:
-            steps:
-            - task: Bash@3
-              inputs:
-                targetType: 'inline'
-                script: |
-                  # Modify deployment script based on the app type
-                  echo "Starting deployment script run"
-                  sudo java -jar '$(Pipeline.Workspace)/drop/**/target/*.jar'
-          routeTraffic:
-            steps:
-            - script: echo routing traffic
-          postRouteTraffic:
-            steps:
-            - script: echo health check post-route traffic
-          on:
-            failure:
+- stage: Deploy
+  displayName: Deploy stage
+  jobs:  
+    - deployment: VMDeploy
+      displayName: web
+      environment:
+        name: VM01
+        resourceType: VirtualMachine
+        tags: web
+      strategy:
+          rolling:
+            maxParallel: 2  #for percentages, mention as x%
+            deploy:
               steps:
-              - script: echo Restore from backup! This is on failure
-            success:
+              - download: current
+                artifact: drop
+              - script: echo initialize, cleanup, backup, install certs
+              - task: Bash@3
+                inputs:
+                  targetType: 'inline'
+                  script: |
+                    # Modify deployment script based on the app type
+                    echo "Starting deployment script run"
+                    sudo java -jar '$(Pipeline.Workspace)/drop/**/target/*.jar'
+            routeTraffic:
               steps:
-              - script: echo Notify! This is on success
+              - script: echo routing traffic
+            postRouteTraffic:
+              steps:
+              - script: echo health check post-route traffic
+            on:
+              failure:
+                steps:
+                - script: echo Restore from backup! This is on failure
+              success:
+                steps:
+                - script: echo Notify! This is on success
